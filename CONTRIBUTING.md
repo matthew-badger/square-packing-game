@@ -42,7 +42,8 @@ for joining names.
 
 ## Code
 
-The game has no dependencies. `node build.js` writes `docs/index.html`; `npm test` runs a
+The game has no dependencies. `node build.js` writes `docs/index.html`, the page GitHub
+Pages serves; commit it rebuilt with any change to `src/`. `npm test` runs a
 quick pass of the test suites (about 30 seconds). Before a release, run `npm run test:full`:
 larger sweeps of the same suites, plus `test/formula.test.js`, which needs
 `test/fixture_L8.json`, made from the independent L\*₈ verification script with

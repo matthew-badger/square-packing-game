@@ -70,12 +70,6 @@ add a language.
 
 The version number lives in `package.json`; the build writes it into the page.
 
-## Publishing
-
-GitHub Pages serves `docs/` from the `main` branch (Settings → Pages → Deploy from a
-branch → `main`, `/docs`). Run `node build.js` and commit `docs/index.html` with each
-release.
-
 ## License
 
 The code is © 2026 Matthew Badger, released under the [MIT License](LICENSE). The bundled
