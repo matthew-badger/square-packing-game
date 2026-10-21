@@ -1,0 +1,1151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Square Packing</title>
+<meta name="description" content="Pack 4 to 8 squares into the smallest square frame. Every answer comes from the exact formulas for L*_n.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='.5' y='.5' width='15' height='15' rx='1.5' fill='%230f1626' stroke='%23f4f1ea'/%3E%3Crect x='2' y='2' width='7' height='7' rx='.6' fill='%237491fd'/%3E%3Crect x='9.5' y='2' width='4.5' height='4.5' rx='.6' fill='%23ff6151'/%3E%3Crect x='2' y='9.5' width='4.5' height='4.5' rx='.6' fill='%2311b981'/%3E%3Crect x='9.5' y='9.5' width='3' height='3' rx='.6' fill='%23f2b800'/%3E%3C/svg%3E">
+<style>/*INLINE:fonts/fonts.css*/</style>
+<style>
+/* One puzzle at a time: the goal on the left, the frame and tray on a canvas, four big
+   buttons under it.  Everything else lives in the menu drawer.  Dark by design; a light
+   set of the same tokens follows the system setting or the choice in the menu. */
+:root {
+  color-scheme: light;
+  --bg: #eef0f4;
+  --surface: #ffffff;
+  --panel: #f5f6f9;
+  --paper: #ffffff;
+  --line: #d5dae4;
+  --line-2: #b6bfce;
+  --ink: #141a2a;
+  --ink-2: #39435c;
+  --muted: #566179;
+  --frame: #141a2a;
+  --frame-fill: #ffffff;
+  --dot: #c4cad6;
+  --lattice: #e3e7ee;
+  --accent: #141a2a;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4e8f1;
+  --focus: #2f6fdc;
+  --good: #1d8a4a;
+  --bad: #c0392b;
+  --star: #c98a00;
+  --star-off: #aab3c3;
+  --tile-ink: #141a2a;
+  --tile-outline: #141a2a;
+  /* square colours by size, largest first; the smallest is always amber.  Tuned so every
+     pair stays apart (CIEDE2000 >= 12.9) under simulated protan, deutan and tritan vision */
+  --rank-0: #7491fd; --rank-1: #ff6151; --rank-2: #11b981; --rank-3: #d27eb1;
+  --rank-4: #a0ebff; --rank-5: #ffff7a; --rank-6: #c3c8c6; --rank-last: #f2b800;
+  --chain-h: #141a2a; --chain-v: #6b4fd8; --chain-slack: #a3acbd;
+  --font-cjk: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', 'Noto Sans SC';
+  --font-display: 'Archivo', var(--font-cjk), 'Noto Sans Devanagari', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'Atkinson Hyperlegible', var(--font-cjk), 'Noto Sans Devanagari', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, var(--font-cjk), 'Noto Sans Devanagari', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1626; --surface: #182238; --panel: #141d31; --paper: #182238; --line: #243150; --line-2: #3a4868;
+    --ink: #f4f1ea; --ink-2: #c3cad9; --muted: #9aa6bf; --frame: #f4f1ea; --frame-fill: #131c30;
+    --dot: #2c3a5c; --lattice: #243150; --accent: #f4f1ea; --accent-ink: #0f1626; --accent-soft: #243150;
+    --focus: #8fd3ff; --good: #4fd18b; --bad: #ff7a6b; --star: #ffb020; --star-off: #4a5878;
+    --tile-outline: transparent; --chain-h: #f4f1ea; --chain-v: #c3a6ff; --chain-slack: #5b6880;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1626; --surface: #182238; --panel: #141d31; --paper: #182238; --line: #243150; --line-2: #3a4868;
+  --ink: #f4f1ea; --ink-2: #c3cad9; --muted: #9aa6bf; --frame: #f4f1ea; --frame-fill: #131c30;
+  --dot: #2c3a5c; --lattice: #243150; --accent: #f4f1ea; --accent-ink: #0f1626; --accent-soft: #243150;
+  --focus: #8fd3ff; --good: #4fd18b; --bad: #ff7a6b; --star: #ffb020; --star-off: #4a5878;
+  --tile-outline: transparent; --chain-h: #f4f1ea; --chain-v: #c3a6ff; --chain-slack: #5b6880;
+}
+
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+}
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+[hidden] { display: none !important; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { opacity: 0.4; cursor: default; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.app {
+  box-sizing: border-box;
+  min-height: 100vh;
+  max-width: 1600px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+/* header */
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  padding: 18px 40px;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 12px; margin: 0; font: 800 24px/1.1 var(--font-display); letter-spacing: -0.01em; }
+.brand svg { flex: none; }
+.top-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.icon-btn {
+  flex: none; width: 44px; height: 44px; border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); padding: 0;
+}
+.mode-switch { display: flex; padding: 4px; border-radius: 26px; background: var(--surface); border: 1px solid var(--line-2); }
+.mode-switch button { height: 40px; padding: 0 18px; border-radius: 20px; border: 0; background: transparent; color: var(--ink-2); font: 800 16px var(--font-display); white-space: nowrap; }
+.mode-switch button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.drawer .mode-switch { align-self: flex-start; }
+.drawer .mode-switch button { border: 0; background: transparent; padding: 0 18px; font: 800 16px var(--font-display); color: var(--ink-2); }
+.drawer .mode-switch button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.menu-mode { display: none !important; }
+.lang-wrap { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.lang-wrap svg { position: absolute; left: 13px; width: 18px; height: 18px; color: var(--ink-2); pointer-events: none; }
+.lang-pick {
+  height: 44px; min-width: 0; max-width: 15em; box-sizing: border-box;
+  padding: 0 14px 0 38px; border-radius: 22px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink); font: 700 15px var(--font-body);
+}
+
+/* the play area: lead + side text on the left, the board on the right, buttons below it */
+main {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "lead stage" "side stage";
+  gap: 18px 44px;
+  padding: 28px 40px 32px;
+  min-height: 0;
+}
+.lead { grid-area: lead; display: flex; flex-direction: column; gap: 12px; padding-top: 12px; }
+.side { grid-area: side; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stage { grid-area: stage; display: flex; flex-direction: column; gap: 18px; min-width: 0; align-self: start; position: sticky; top: 12px; }
+/* the board fills the window's height less the header, the padding and the buttons */
+.table { position: relative; min-width: 0; height: max(420px, calc(100vh - 230px)); }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+
+.level-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 800 17px var(--font-display); color: var(--muted); }
+.stars { display: inline-flex; gap: 2px; }
+.stars svg { width: 22px; height: 22px; }
+.goal { margin: 0; font: 800 50px/1.03 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
+.goal-sub { margin: 0; font-size: 20px; color: var(--ink-2); }
+
+.progress { display: flex; justify-content: space-between; gap: 8px; font-size: 16px; color: var(--muted); }
+.timer { font-variant-numeric: tabular-nums; }
+.timer.done { color: var(--good); font-weight: 700; }
+.bar { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.bar b { display: block; height: 100%; width: 0; background: var(--ink); transition: width 0.2s; }
+.status { font-size: 17px; color: var(--ink-2); min-height: 2.9em; }
+.status.solved { color: var(--good); font-weight: 700; }
+.status.warn { color: var(--bad); }
+.hints { margin: 0; padding-left: 1.3em; font-size: 16px; color: var(--ink-2); }
+.hints li + li { margin-top: 6px; }
+.free-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.free-panel .option > span { font-size: 16px; color: var(--ink-2); }
+.n-chips { display: flex; gap: 6px; }
+.n-chips button { flex: 1; height: 46px; border-radius: 23px; border: 2px solid var(--line-2); background: transparent; color: var(--ink-2); font: 800 18px var(--font-display); padding: 0; }
+.n-chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.free-panel .btn { height: 50px; font-size: 17px; }
+.free-panel > .btn { width: 100%; }
+.loader { display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.loader label { font-size: 16px; color: var(--ink-2); }
+.loader-row { display: flex; gap: 8px; }
+.loader input { flex: 1; min-width: 0; height: 50px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); font: 500 16px var(--font-mono); }
+.loader .btn { padding: 0 18px; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+.switch-row label { display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.sw-title { font: 800 17px var(--font-display); }
+.sw-note { font-size: 14px; color: var(--muted); }
+.switch { flex: none; position: relative; width: 56px; height: 32px; border-radius: 16px; border: 0; padding: 0; background: var(--line-2); }
+.switch::after { content: ''; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 12px; background: var(--ink); transition: left 0.15s; }
+.switch[aria-checked="true"] { background: var(--good); }
+.switch[aria-checked="true"]::after { left: 28px; background: #0f1626; }
+.solved-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.solved-card h3 { margin: 0 0 6px; font: 800 30px var(--font-display); color: var(--good); }
+.solved-card p { margin: 0 0 8px; font-size: 17px; color: var(--ink-2); }
+.solved-card p:last-child { margin-bottom: 0; }
+.answer-plain { margin: 0; font-size: 17px; }
+.answer-plain:empty { display: none; }
+.levels-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.levels-head span { color: var(--muted); font-size: 15px; }
+.lv-group { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.lv-title { display: flex; align-items: center; gap: 10px; font: 800 15px var(--font-display); }
+.lv-title .stars svg { width: 16px; height: 16px; }
+.lv-title small { font: 400 14px var(--font-body); color: var(--muted); }
+.lv-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+/* a level tile: its number while unsolved, the packing once solved; the current one ringed */
+.drawer .lv-grid button.lv {
+  position: relative; aspect-ratio: 1; height: auto; padding: 0; border-radius: 6px;
+  border: 2px solid var(--line-2); background: transparent; color: var(--ink-2); font: 800 20px var(--font-display);
+}
+.drawer .lv-grid button.lv.solved { border-color: transparent; background: var(--frame-fill); }
+.lv canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 4px; }
+.lv.solved .num {
+  position: absolute; right: 2px; bottom: 2px; min-width: 18px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 4px; background: var(--panel); color: var(--ink); font: 800 13px/18px var(--font-display);
+}
+.drawer .lv-grid button.lv.current { border-color: var(--star); box-shadow: 0 0 0 2px var(--star); color: var(--ink); }
+.text-btn { align-self: flex-start; border: 0; background: none; padding: 4px 0; color: var(--ink-2); font: 700 15px var(--font-body); text-decoration: underline; text-underline-offset: 3px; }
+.text-btn:hover { color: var(--ink); }
+
+canvas { display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+canvas.dragging { cursor: grabbing !important; }
+#board { position: absolute; inset: 0; border-radius: 10px; }
+
+.btn {
+  height: 54px; padding: 0 28px; border-radius: 27px;
+  border: 2px solid var(--line-2); background: transparent; color: var(--ink);
+  font: 800 18px var(--font-display); white-space: nowrap;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.quiet { color: var(--muted); }
+.btn:not(:disabled):hover { border-color: var(--ink-2); }
+.btn .arrow { margin-left: 6px; }
+.btn .ico { display: none; }
+
+/* answer (moves to the solved card and the Advanced panel in later steps) */
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; font-size: 15px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.tabs button { padding: 3px 10px; font: 600 14px var(--font-mono); border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel); }
+.tabs button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--ink); }
+.strategy { font: 800 22px var(--font-display); margin: 0 0 4px; }
+.strategy small { font: 500 14px var(--font-mono); color: var(--muted); margin-left: 6px; }
+.formula { font-family: var(--font-mono); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.formula b { color: var(--star); }
+.defs { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.verdict { margin: 10px 0 0; }
+sub { font-size: 0.72em; line-height: 0; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0 0 8px; }
+.ledger { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.ledger td { padding: 3px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ledger td.num { text-align: right; white-space: nowrap; }
+.ledger td.terms { color: var(--muted); overflow-wrap: anywhere; }
+.ledger tr.win td, .ledger tr.win td.terms { color: var(--star); font-weight: 600; }
+.ledger tr.pick { cursor: pointer; }
+.ledger tr.pick:hover td { background: var(--accent-soft); }
+.ledger tr.floor td { border-bottom: 2px solid var(--ink); color: var(--muted); font-style: italic; }
+.ledger-wrap { max-height: 320px; overflow-y: auto; }
+details summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+.contacts { border-collapse: collapse; font-family: var(--font-mono); font-size: 13px; margin-top: 6px; }
+.contacts th, .contacts td { padding: 2px 10px 2px 0; text-align: left; }
+.contacts th { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+/* menu drawer */
+dialog.drawer {
+  margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min(440px, 100vw); max-width: 100vw; box-sizing: border-box;
+  border: 0; border-left: 1px solid var(--line); padding: 0; background: var(--panel); color: var(--ink);
+}
+dialog.drawer::backdrop { background: rgba(5, 8, 15, 0.55); }
+.drawer-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.drawer-head h2 { margin: 0; font: 800 22px var(--font-display); }
+.drawer-body { padding: 8px 20px 40px; display: flex; flex-direction: column; }
+.drawer-body > section { padding: 18px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.drawer-body > section:last-child { border-bottom: 0; }
+.drawer-body h3 { margin: 0; font: 800 17px var(--font-display); }
+.drawer button:not(.icon-btn), .drawer select, .drawer input[type="text"], .drawer input[type="number"] {
+  border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); color: var(--ink);
+  padding: 8px 12px; font-size: 15px;
+}
+.drawer button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.error { color: var(--bad); font-size: 14px; flex-basis: 100%; }
+.error:empty { display: none; }
+.seg { position: relative; justify-self: start; align-self: flex-start; display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; background: var(--surface); border-left: 1px solid var(--line-2); }
+.seg label:first-of-type { border-left: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.seg input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: -3px; }
+.option { display: grid; gap: 5px; }
+.option > span { font-size: 14px; color: var(--muted); }
+.gravity { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(2, 44px); gap: 6px; }
+.gravity button, .turns button { padding: 0 !important; font: 700 18px var(--font-mono) !important; }
+.gravity [data-dir="up"] { grid-column: 2; grid-row: 1; }
+.gravity [data-dir="left"] { grid-column: 1; grid-row: 2; }
+.gravity [data-dir="down"] { grid-column: 2; grid-row: 2; }
+.gravity [data-dir="right"] { grid-column: 3; grid-row: 2; }
+.turns { display: grid; grid-template-columns: repeat(2, 44px); grid-auto-rows: 44px; gap: 6px; }
+.help { font-size: 15px; color: var(--ink-2); margin: 0; padding-left: 1.1em; }
+.help li + li { margin-top: 4px; }
+kbd { font: 600 13px var(--font-mono); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface); }
+.about { font-size: 14px; color: var(--ink-2); }
+.about p { margin: 0 0 8px; }
+.about a { color: var(--ink); overflow-wrap: anywhere; }
+.about .ver { font: 500 13px var(--font-mono); color: var(--muted); }
+
+
+:lang(zh) .eyebrow, :lang(hi) .eyebrow { letter-spacing: 0.02em; }
+:lang(zh) .goal, :lang(hi) .goal, :lang(zh) .brand, :lang(hi) .brand { letter-spacing: 0; }
+
+/* medium windows: a narrower text column so the board and the buttons keep their room */
+@media (max-width: 1200px) {
+  main { grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); gap: 16px 32px; }
+  .goal { font-size: 40px; }
+  .btn { padding: 0 20px; font-size: 17px; }
+}
+/* phones and narrow windows: one column, board right after the goal */
+@media (max-width: 900px) {
+  .top { padding: 12px 16px; }
+  .brand { font-size: 20px; }
+  main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas: "lead" "stage" "side";
+    gap: 14px;
+    padding: 16px 16px 28px;
+  }
+  .lead { padding-top: 0; gap: 8px; }
+  .goal { font-size: 32px; }
+  .goal-sub { font-size: 17px; }
+  .stage { position: static; gap: 14px; }
+  .table { height: max(380px, min(640px, calc(100svh - 300px))); }
+  .actions { justify-content: stretch; flex-wrap: wrap; gap: 8px; }
+  .actions .btn { flex: 1 1 auto; height: 52px; padding: 0 14px; font-size: 17px; }
+  /* Start over and Skip shrink to icons; Next level keeps its words */
+  .actions .btn.compact { flex: 0 0 52px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .actions .btn.compact .ico { display: block; }
+  .actions .btn.compact .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .actions .btn.compact .arrow { margin: 0; font-size: 22px; }
+  .actions .btn.compact.primary { flex: 1 1 auto; padding: 0 14px; }
+  .actions .btn.compact.primary .label { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+  .actions .btn.compact.primary .arrow { margin-left: 6px; font-size: inherit; }
+  .status { min-height: 0; }
+  .lang-pick { max-width: 11em; }
+  .top-mode { display: none !important; }
+  .menu-mode { display: flex !important; }
+}
+@media (max-width: 1080px) and (min-width: 901px) {
+  .mode-switch button { padding: 0 12px; font-size: 15px; }
+}
+@media (max-width: 420px) {
+  .brand span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .bar b { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <h1 class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="4" width="16" height="16" rx="1.5" fill="#7491fd"/><rect x="20" y="4" width="10" height="10" rx="1.5" fill="#ff6151"/><rect x="4" y="20" width="10" height="10" rx="1.5" fill="#11b981"/><rect x="20" y="20" width="7" height="7" rx="1.5" fill="#f2b800"/></svg>
+      <span data-i18n="app.name">Square Packing</span>
+    </h1>
+    <div class="mode-switch top-mode" role="group" data-i18n-aria="aria.mode" aria-label="Mode">
+      <button type="button" data-mode="level" data-i18n="levels.title">Levels</button>
+      <button type="button" data-mode="free" data-i18n="mode.free">Free play</button>
+    </div>
+    <div class="top-right">
+      <span class="lang-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9.2"/><path d="M2.8 12h18.4M12 2.8c2.6 2.6 3.9 5.6 3.9 9.2s-1.3 6.6-3.9 9.2M12 2.8C9.4 5.4 8.1 8.4 8.1 12s1.3 6.6 3.9 9.2"/>
+        </svg>
+        <select id="lang-pick" class="lang-pick" aria-label="Language" title="Language"></select>
+      </span>
+      <button type="button" class="icon-btn" id="menu-btn" aria-haspopup="dialog" data-i18n-aria="aria.menu" aria-label="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="lead" aria-labelledby="goal">
+      <div class="level-line"><span id="level-label"></span><span class="stars" id="stars" role="img"></span></div>
+      <h2 class="goal" id="goal"></h2>
+      <p class="goal-sub" id="goal-sub"></p>
+      <button type="button" class="text-btn" id="builds-on" hidden></button>
+    </section>
+
+    <div class="stage">
+    <div class="table" id="table">
+      <canvas id="board" tabindex="0" data-i18n-aria="aria.board" aria-label="Packing board"></canvas>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn primary" id="hint-btn"></button>
+      <button type="button" class="btn" id="answer-btn"></button>
+      <button type="button" class="btn compact" id="start-over">
+        <svg class="ico" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>
+        <span class="label" data-i18n="btn.reset"></span>
+      </button>
+      <button type="button" class="btn quiet compact" id="skip-btn"><span class="label" id="skip-label"></span><span class="arrow" aria-hidden="true">→</span></button>
+    </div>
+    </div>
+
+    <section class="side">
+      <section class="free-panel" id="free-panel" hidden aria-labelledby="free-n-label">
+        <div class="option"><span id="free-n-label" data-i18n="free.howMany">How many squares?</span>
+          <div class="n-chips" id="n-chips" role="group" aria-labelledby="free-n-label">
+            <button type="button" data-n="4">4</button><button type="button" data-n="5">5</button><button type="button" data-n="6">6</button><button type="button" data-n="7">7</button><button type="button" data-n="8">8</button>
+          </div>
+        </div>
+        <button type="button" class="btn primary" id="new-puzzle" data-i18n="free.newRandom">New random puzzle</button>
+        <form class="loader" id="loader" autocomplete="off">
+          <label for="sides-input" data-i18n="label.orSides">Or type your own side lengths</label>
+          <div class="loader-row">
+            <input type="text" id="sides-input" inputmode="numeric" placeholder="19 16 13 12 10 9 8" aria-describedby="input-error">
+            <button type="submit" class="btn" data-i18n="btn.load">Play</button>
+          </div>
+          <div class="error" id="input-error" role="alert"></div>
+        </form>
+        <div class="switch-row">
+          <label for="adv-switch"><span class="sw-title" data-i18n="adv.title">Advanced</span><span class="sw-note" data-i18n="adv.note"></span></label>
+          <button type="button" class="switch" id="adv-switch" role="switch" aria-checked="false"></button>
+        </div>
+      </section>
+      <div>
+        <div class="progress"><span id="progress"></span><span class="timer" id="timer">0:00</span></div>
+        <div class="bar"><b id="bar"></b></div>
+      </div>
+      <div class="status" id="status" aria-live="polite"></div>
+      <section class="solved-card" id="solved" hidden aria-live="polite">
+        <h3 data-i18n="solved.title">Packed!</h3>
+        <p id="solved-stats"></p>
+        <p id="solved-why"></p>
+      </section>
+      <ol class="hints" id="hints" aria-live="polite" hidden></ol>
+      <button type="button" class="text-btn" id="clear-hints" data-i18n="btn.clearHints" hidden>Clear hints</button>
+      <section class="answer" id="answer" hidden>
+        <p class="answer-plain" id="answer-plain"></p>
+        <div id="answer-tech">
+        <div class="tabs" id="tabs" role="tablist" data-i18n-aria="aria.tabs" aria-label="Optimal strategies" hidden></div>
+        <p class="strategy" id="strategy"></p>
+        <div class="formula" id="formula"></div>
+        <div class="defs" id="defs"></div>
+        <p class="verdict" id="verdict"></p>
+        <div id="ledger-block">
+          <p class="eyebrow" style="margin-top:14px" data-i18n="ans.ledger">Every strategy, cheapest first</p>
+          <div class="ledger-wrap"><table class="ledger" id="ledger"></table></div>
+        </div>
+        <details style="margin-top:12px">
+          <summary data-i18n="ans.contacts">Contact table of this packing</summary>
+          <table class="contacts" id="contacts"></table>
+        </details>
+        </div>
+      </section>
+    </section>
+  </main>
+  <div class="sr" id="sr" aria-live="polite"></div>
+</div>
+
+<dialog class="drawer" id="menu" aria-labelledby="menu-title">
+  <div class="drawer-head">
+    <h2 id="menu-title" data-i18n="menu.title">Menu</h2>
+    <button type="button" class="icon-btn" id="menu-close" data-i18n-aria="menu.close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <section class="menu-mode">
+      <div class="mode-switch" role="group" data-i18n-aria="aria.mode" aria-label="Mode">
+        <button type="button" data-mode="level" data-i18n="levels.title">Levels</button>
+        <button type="button" data-mode="free" data-i18n="mode.free">Free play</button>
+      </div>
+    </section>
+
+    <section id="levels-section">
+      <div class="levels-head"><h3 data-i18n="levels.title">Levels</h3><span id="levels-count"></span></div>
+      <div id="levels-list"></div>
+    </section>
+
+    <section>
+      <h3 data-i18n="move.eyebrow">Move the packing</h3>
+      <div class="row">
+        <div class="gravity" id="gravity">
+          <button type="button" data-dir="up" data-i18n-aria="aria.pushUp" aria-label="Push up">↑</button>
+          <button type="button" data-dir="left" data-i18n-aria="aria.pushLeft" aria-label="Push left">←</button>
+          <button type="button" data-dir="down" data-i18n-aria="aria.pushDown" aria-label="Push down">↓</button>
+          <button type="button" data-dir="right" data-i18n-aria="aria.pushRight" aria-label="Push right">→</button>
+        </div>
+        <div class="turns" id="turns">
+          <button type="button" data-op="ccw" data-i18n-title="title.ccw" data-i18n-aria="aria.ccw" aria-label="Turn left">⟲</button>
+          <button type="button" data-op="cw" data-i18n-title="title.cw" data-i18n-aria="aria.cw" aria-label="Turn right">⟳</button>
+          <button type="button" data-op="flipH" data-i18n-title="title.flipH" data-i18n-aria="aria.flipH" aria-label="Mirror left to right">⇆</button>
+          <button type="button" data-op="flipV" data-i18n-title="title.flipV" data-i18n-aria="aria.flipV" aria-label="Mirror top to bottom">⇅</button>
+        </div>
+      </div>
+      <div class="row">
+        <button type="button" id="shuffle" data-i18n="btn.shuffle">Shuffle</button>
+      </div>
+    </section>
+
+    <section>
+      <h3 data-i18n="opt.display">Display</h3>
+      <div class="option"><span data-i18n="opt.theme">Colours</span>
+        <div class="seg" role="radiogroup" data-i18n-aria="opt.theme" aria-label="Colours">
+          <input type="radio" name="theme" id="theme-auto" value="auto" checked><label for="theme-auto" data-i18n="theme.auto">Automatic</label>
+          <input type="radio" name="theme" id="theme-dark" value="dark"><label for="theme-dark" data-i18n="theme.dark">Dark</label>
+          <input type="radio" name="theme" id="theme-light" value="light"><label for="theme-light" data-i18n="theme.light">Light</label>
+        </div>
+      </div>
+      <div class="option"><span data-i18n="opt.labels">Labels</span>
+        <div class="seg" role="radiogroup" data-i18n-aria="opt.labels" aria-label="Labels">
+          <input type="radio" name="labels" id="labels-value" value="value" checked><label for="labels-value" data-i18n="labels.value">Side</label>
+          <input type="radio" name="labels" id="labels-index" value="index"><label for="labels-index" data-i18n="labels.index">Index</label>
+          <input type="radio" name="labels" id="labels-none" value="none"><label for="labels-none" data-i18n="labels.none">None</label>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3 data-i18n="help.eyebrow">How to play</h3>
+      <ul class="help">
+        <li data-i18n="help.drag"></li>
+        <li data-i18n="help.snap"></li>
+        <li data-i18n="help.double"></li>
+        <li data-i18n-html="help.buttons"></li>
+        <li data-i18n="help.levels"></li>
+        <li data-i18n-html="help.free"></li>
+        <li data-i18n="help.amber"></li>
+        <li data-i18n="help.rank"></li>
+        <li data-i18n-html="help.push"></li>
+        <li data-i18n-html="help.turn"></li>
+        <li data-i18n-html="help.keys"></li>
+      </ul>
+    </section>
+
+    <section class="about" id="about">
+      <h3><span data-i18n="about.eyebrow">About</span> <span class="ver">v__VERSION__</span></h3>
+      <p id="about-what"></p>
+      <p id="about-papers"></p>
+      <p id="about-source"></p>
+      <p id="about-langs"></p>
+      <p id="about-privacy" data-i18n="about.privacy"></p>
+      <p id="about-license"></p>
+    </section>
+  </div>
+</dialog>
+
+<script>/*INLINE:i18n.js*/</script>
+<script>/*INLINE:lang/es.js*/</script>
+<script>/*INLINE:lang/fr.js*/</script>
+<script>/*INLINE:lang/hi.js*/</script>
+<script>/*INLINE:lang/pt.js*/</script>
+<script>/*INLINE:lang/zh.js*/</script>
+<script>/*INLINE:formula.js*/</script>
+<script>/*INLINE:board.js*/</script>
+<script>/*INLINE:reveal.js*/</script>
+<script>/*INLINE:bank.js*/</script>
+<script>/*INLINE:serve.js*/</script>
+<script>/*INLINE:levels.js*/</script>
+<script>/*INLINE:progress.js*/</script>
+<script>
+(function () {
+  'use strict';
+  const F = window.SPFormula, B = window.SPBoard, RV = window.SPReveal, SV = window.SPServe;
+  const LV = window.SPLevels, PG = window.SPProgress;
+  // Opened as src/page.html, the template's scripts are still empty placeholders.
+  if (!window.SPI18n) {
+    document.body.innerHTML = '<p style="margin:2em;font:16px system-ui,sans-serif">This is the page template, ' +
+      'not the game. Open <code>docs/index.html</code> to play, or run <code>node build.js</code> to rebuild it.</p>';
+    return;
+  }
+  const I = window.SPI18n, T = I.t;
+
+  const $ = id => document.getElementById(id);
+  const input = $('sides-input'), err = $('input-error');
+
+  // ------------------------------------------------------------------ saved settings
+  // Kept in this browser only; everything works without it.  Progress, settings and the Free
+  // play deck are one record (progress.js), which also carries over a v0.1.0 save once.
+  let store = null;
+  try { store = window.localStorage; } catch (e) { store = null; }
+  const saved = PG.load(store);
+  const prefs = saved.prefs;            // lang, labels, theme, advanced, freeN
+  I.setLang(I.pick(prefs.lang, navigator.language));
+  document.documentElement.lang = I.lang;
+  const serveState = saved.serve || SV.newState();
+  saved.serve = serveState;
+  // storage unavailable: progress and settings last for this visit
+  function save() { PG.save(store, saved); }
+  function applyTheme() {
+    if (prefs.theme === 'dark' || prefs.theme === 'light') document.documentElement.dataset.theme = prefs.theme;
+    else delete document.documentElement.dataset.theme;
+  }
+  applyTheme();
+
+  let seed = null, tab = 0, hintData = null;
+  // hints: how many were used (counts for the record); shown: how many are on screen now
+  let puzzle = { hints: 0, shown: 0, answered: false, solved: false };
+  let playing = { kind: 'level', level: saved.current };
+  const board = new B.Board($('board'), update);
+  const answerBtn = $('answer-btn');
+
+  function parseSides(text) {
+    const parts = text.trim().split(/[\s,;.]+/).filter(Boolean);
+    if (parts.length < 4 || parts.length > 8) return { error: T('err.count') };
+    const s = parts.map(Number);
+    if (s.some(v => !Number.isInteger(v) || v < 1 || v > 999))
+      return { error: T('err.range') };
+    return { sides: s.sort((a, b) => b - a) };
+  }
+
+  function load(sides, opts) {
+    opts = opts || {};
+    const a = F.analyze(sides);
+    seed = a;
+    hintData = RV.hints(a, 0);
+    puzzle = { hints: 0, shown: 0, answered: false, solved: false };
+    if (!opts.level) playing = { kind: 'free' };
+    // New puzzle keeps to the number of squares on the board
+    if (playing.kind === 'free' && prefs.freeN !== a.n) { prefs.freeN = a.n; save(); }
+    renderHints();
+    tab = 0;
+    $('answer').hidden = true;
+    input.value = a.s.join(' ');
+    board.plain = playing.kind === 'level' || !prefs.advanced;
+    board.load(a.s, a.L);
+    renderLead();
+    renderFree();
+    startTimer();
+  }
+
+  // ------------------------------------------------------------------ levels
+  function loadLevel(k) {
+    const lv = LV.get(k) || LV.get(1);
+    saved.current = lv.level;
+    save();
+    playing = { kind: 'level', level: lv.level };
+    load(lv.s.slice(), { level: true });
+  }
+  const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.8-4.9 4.6 1.3 6.5L12 17.2l-5.9 3.2 1.3-6.5-4.9-4.6 6.6-.8z" fill="FILL" stroke="STROKE" stroke-width="1.6"/></svg>';
+  function starsHTML(k) {
+    return Array.from({ length: LV.MAX_STARS }, (_, i) => i < k
+      ? STAR.replace('FILL', 'var(--star)').replace('STROKE', 'var(--star)')
+      : STAR.replace('FILL', 'none').replace('STROKE', 'var(--star-off)')).join('');
+  }
+  function renderLead() {
+    if (!seed) return;
+    const lv = playing.kind === 'level' ? LV.get(playing.level) : null;
+    const stars = $('stars');
+    if (lv) {
+      $('level-label').textContent = T('level.label', { k: lv.level, n: LV.COUNT });
+      stars.hidden = false;
+      stars.innerHTML = starsHTML(lv.stars);
+      stars.setAttribute('aria-label', T('level.stars', { k: lv.stars, n: LV.MAX_STARS }));
+    } else {
+      $('level-label').textContent = T('mode.free');
+      stars.hidden = true;
+    }
+    $('goal').textContent = T('goal.fit', { n: seed.n });
+    $('goal-sub').textContent = T('goal.frame', { L: seed.L });
+    const next = lv && puzzle.solved;
+    $('skip-label').textContent = T(next ? 'btn.nextLevel' : lv ? 'btn.skip' : 'btn.new');
+    $('skip-btn').classList.toggle('primary', !!next);
+    $('skip-btn').classList.toggle('quiet', !next);
+    $('hint-btn').classList.toggle('primary', !next);
+    const bo = $('builds-on');
+    bo.hidden = !(lv && lv.buildsOn);
+    if (lv && lv.buildsOn) bo.textContent = T('level.buildsOn', { k: lv.buildsOn });
+  }
+  $('builds-on').addEventListener('click', () => {
+    const lv = playing.kind === 'level' && LV.get(playing.level);
+    if (lv && lv.buildsOn) loadLevel(lv.buildsOn);
+  });
+  $('skip-btn').addEventListener('click', () => {
+    if (playing.kind === 'level') loadLevel(playing.level % LV.COUNT + 1);
+    else newPuzzle();
+  });
+  $('start-over').addEventListener('click', () => board.reset());
+
+  function update(st) {
+    if (!seed) return;
+    const n = seed.n;
+    $('gravity').querySelectorAll('button').forEach(b => { b.disabled = st.revealed; });
+    $('turns').querySelectorAll('button').forEach(b => { b.disabled = st.revealed; });
+    $('start-over').disabled = st.revealed;
+    $('shuffle').disabled = st.revealed;
+    answerBtn.textContent = T(st.revealed ? 'btn.backToYours'
+      : st.solved ? 'btn.compare' : 'btn.showAnswer');
+    renderSolved(st);
+    $('hint-btn').hidden = st.solved && !st.revealed;   // nothing left to hint at
+    if (st.revealed) {
+      stopTimer(false);
+      $('progress').textContent = T('prog.showing');
+      $('bar').style.width = '100%';
+      $('status').className = 'status';
+      $('status').textContent = T('status.showing');
+      return;
+    }
+    $('progress').textContent = T('prog.inside', { k: st.inside, n });
+    $('bar').style.width = (100 * st.inside / n) + '%';
+    const el = $('status');
+    el.className = 'status';
+    if (st.solved) {
+      stopTimer(true);
+      if (!puzzle.solved) { onSolved(); renderSolved(st); }
+      el.className = 'status solved';
+      el.textContent = T('status.packed', { n, L: seed.L });
+    } else if (st.overflow.length) {
+      el.className = 'status warn';
+      el.textContent = st.overflow.length === 1
+        ? T('status.overflow1', { s: seed.s[st.overflow[0]] })
+        : T('status.overflowK', { k: st.overflow.length });
+    } else if (st.inside === 0) {
+      el.textContent = T('status.start', { L: seed.L });
+    } else {
+      el.textContent = T('status.toGo', { k: n - st.inside });
+    }
+  }
+
+
+  // ------------------------------------------------------------------ solved card
+  // Shown while the board holds a solved packing: time, hints, and the plain reason the
+  // frame is full, with the lines of squares ringed and numbered on the board.
+  let ringed = false;
+  function renderSolved(st) {
+    const show = st.solved && !st.revealed;
+    $('solved').hidden = !show;
+    $('status').hidden = show;
+    if (!show) {
+      if (ringed) { ringed = false; board.setHint(puzzle.shown, hintData.overlay); }
+      return;
+    }
+    const used = puzzle.answered ? T('status.sawAnswer')
+      : puzzle.hints ? T('status.usedHints', { h: puzzle.hints }) : T('status.noHints');
+    const r = puzzle.result || {};
+    $('solved-stats').textContent = [timer && timer.ms ? T('solved.time', { t: fmt(timer.ms) }) : '', used,
+      r.faster ? T('solved.faster') : '', r.fewerHints ? T('solved.fewer') : ''].filter(Boolean).join(' ');
+    const w = RV.why(seed, board.pos);
+    $('solved-why').innerHTML = w.html;
+    $('solved-why').hidden = !w.html;
+    if (!w.standard && w.groups.length) {
+      ringed = true;
+      board.setHint(3, { corners: [], groups: w.groups, ghost: null });
+    }
+  }
+
+  // ------------------------------------------------------------------ answer
+  function showAnswer(k) {
+    tab = k;
+    puzzle.answered = true;
+    if (playing.kind === 'level') { PG.markSeen(saved, playing.level); save(); }
+    const ans = RV.answer(seed, k);
+    board.reveal(ans.positions, ans.chains);
+    renderAnswer(ans);
+  }
+
+  function renderAnswer(ans) {
+    $('answer').hidden = false;
+    const plain = playing.kind === 'level' || !prefs.advanced;
+    $('answer-tech').hidden = plain;
+    $('answer-plain').innerHTML = plain ? RV.why(seed, ans.positions).html : '';
+    const tabs = $('tabs');
+    tabs.textContent = '';
+    tabs.hidden = !ans.tabs.length;
+    ans.tabs.forEach((tt, k) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(k === ans.index));
+      b.textContent = tt.name;
+      b.title = tt.id;
+      b.addEventListener('click', () => showAnswer(k));
+      tabs.appendChild(b);
+    });
+    $('strategy').innerHTML = ans.title.html;
+    $('formula').innerHTML = ans.formulaHTML;
+    $('defs').innerHTML = ans.defsHTML;
+    $('verdict').innerHTML = ans.verdictHTML;
+
+    $('ledger-block').hidden = !ans.ledger.length;
+    const led = $('ledger');
+    led.innerHTML = '';
+    for (const r of ans.ledger) {
+      const tr = led.insertRow();
+      if (r.floor) {
+        tr.className = 'floor';
+        tr.innerHTML = `<td>${r.html}</td><td class="num">${r.value}</td><td></td><td class="terms"></td>`;
+        continue;
+      }
+      if (r.win) tr.className = 'win';
+      if (r.tab >= 0 && !r.shown) {
+        tr.classList.add('pick');
+        tr.tabIndex = 0;
+        tr.title = T('ans.pick');
+        const go = () => showAnswer(r.tab);
+        tr.addEventListener('click', go);
+        tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+      }
+      const over = r.over > 0 ? `+${r.over}` : r.over < 0 ? `−${-r.over}` : '';
+      tr.innerHTML = `<td>${r.name}${r.shown ? ' ◂' : ''}</td><td class="num">${r.value}</td>` +
+                     `<td class="num">${over}</td><td class="terms">${r.termsHTML}</td>`;
+    }
+
+    const ct = $('contacts');
+    ct.innerHTML = '<tr><th>#</th><th>s</th><th>R</th><th>U</th></tr>';
+    for (const row of B.contactTable(seed.s, ans.positions)) {
+      const tr = ct.insertRow();
+      tr.innerHTML = `<td>${row.number}</td><td>${row.side}</td>` +
+                     `<td>${row.R.join(', ') || '—'}</td><td>${row.U.join(', ') || '—'}</td>`;
+    }
+  }
+
+
+  // ------------------------------------------------------------------ hints
+  function renderHints() {
+    const list = $('hints'), btn = $('hint-btn'), steps = hintData.steps.length;
+    list.textContent = '';
+    list.hidden = !puzzle.shown;
+    for (let k = 0; k < puzzle.shown; k++) {
+      const li = document.createElement('li');
+      li.innerHTML = hintData.steps[k].html;
+      list.appendChild(li);
+    }
+    $('clear-hints').hidden = !puzzle.shown;
+    btn.disabled = puzzle.shown >= steps;
+    btn.textContent = puzzle.shown >= steps ? T('btn.noHints') : T('btn.hint');
+    board.setHint(puzzle.shown, hintData.overlay);
+  }
+  // A hint shown again after clearing costs nothing new: only the furthest one counts.
+  $('hint-btn').addEventListener('click', () => {
+    if (puzzle.shown >= hintData.steps.length) return;
+    puzzle.shown++;
+    puzzle.hints = Math.max(puzzle.hints, puzzle.shown);
+    renderHints();
+  });
+  $('clear-hints').addEventListener('click', () => {
+    puzzle.shown = 0;
+    renderHints();
+    $('hint-btn').focus();
+  });
+
+  function onSolved() {
+    puzzle.solved = true;
+    puzzle.result = playing.kind === 'level'
+      ? PG.recordSolve(saved, playing.level, { hints: puzzle.hints, answered: puzzle.answered, ms: timer && timer.ms })
+      : null;
+    save();
+    renderLead();
+    renderLevelList();
+  }
+
+  answerBtn.addEventListener('click', () => {
+    if (board.shown) { board.hide(); $('answer').hidden = true; }
+    else showAnswer(tab);
+  });
+
+  // controls
+  $('loader').addEventListener('submit', e => {
+    e.preventDefault();
+    const r = parseSides(input.value);
+    err.textContent = r.error || '';
+    if (r.sides) load(r.sides);
+  });
+
+  // ------------------------------------------------------------------ timer
+  let timer = null;
+  const fmt = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  function startTimer() {
+    if (timer && timer.tick) clearInterval(timer.tick);
+    timer = { t0: Date.now(), running: true, ms: undefined };
+    const el = $('timer');
+    el.className = 'timer';
+    el.textContent = '0:00';
+    timer.tick = setInterval(() => { if (timer.running) el.textContent = fmt(Date.now() - timer.t0); }, 500);
+  }
+  function stopTimer(solved) {
+    if (!timer || !timer.running) return;
+    timer.running = false;
+    clearInterval(timer.tick);
+    const el = $('timer');
+    if (solved) timer.ms = Math.max(1, Date.now() - timer.t0);
+    el.textContent = solved ? fmt(timer.ms) : '—';
+    if (solved) el.className = 'timer done';
+  }
+
+  // ------------------------------------------------------------------ puzzles
+  function newPuzzle() {
+    err.textContent = '';
+    // every strategy at this size in turn, mostly with one winner (serve.js WEIGHTS)
+    const r = SV.next(serveState, prefs.freeN);
+    save();
+    load(r.s);
+  }
+  $('new-puzzle').addEventListener('click', newPuzzle);
+
+  // ------------------------------------------------------------------ Free play and Advanced
+  function setMode(kind) {
+    if (kind === 'free' && playing.kind !== 'free') newPuzzle();
+    else if (kind === 'level' && playing.kind !== 'level') loadLevel(saved.current);
+    closeMenu();
+  }
+  for (const b of document.querySelectorAll('.mode-switch button'))
+    b.addEventListener('click', () => setMode(b.dataset.mode));
+  function renderFree() {
+    for (const b of document.querySelectorAll('.mode-switch button'))
+      b.setAttribute('aria-pressed', String(b.dataset.mode === playing.kind));
+    $('free-panel').hidden = playing.kind !== 'free';
+    for (const b of $('n-chips').querySelectorAll('button')) {
+      b.setAttribute('aria-pressed', String(+b.dataset.n === prefs.freeN));
+      b.setAttribute('aria-label', T('opt.nsq', { n: +b.dataset.n }));
+    }
+    $('adv-switch').setAttribute('aria-checked', String(!!prefs.advanced));
+  }
+  $('n-chips').addEventListener('click', e => {
+    const b = e.target.closest('button[data-n]');
+    if (!b) return;
+    prefs.freeN = +b.dataset.n;
+    save();
+    newPuzzle();
+  });
+  $('adv-switch').addEventListener('click', () => {
+    prefs.advanced = !prefs.advanced;
+    save();
+    renderFree();
+    board.plain = playing.kind === 'level' || !prefs.advanced;
+    if (seed && !$('answer').hidden) renderAnswer(RV.answer(seed, tab));
+    board.draw();
+  });
+
+  function syncOptions() {
+    for (const name of ['labels', 'theme'])
+      for (const r of document.querySelectorAll(`input[name="${name}"]`)) r.checked = r.value === prefs[name];
+  }
+  document.querySelectorAll('input[name="theme"]').forEach(r => r.addEventListener('change', () => {
+    prefs.theme = r.value; applyTheme(); save(); renderLevelList();
+  }));
+  $('gravity').addEventListener('click', e => {
+    const b = e.target.closest('button[data-dir]');
+    if (b) board.gravity(b.dataset.dir);
+  });
+  $('shuffle').addEventListener('click', () => board.shuffle());
+  function turn(op) {
+    if (!board.turn(op)) {
+      const el = $('status');
+      el.className = 'status warn';
+      el.textContent = T('status.turnRefused');
+    }
+  }
+  $('turns').addEventListener('click', e => {
+    const b = e.target.closest('button[data-op]');
+    if (b) turn(b.dataset.op);
+  });
+
+  // ------------------------------------------------------------------ level list (menu)
+  function renderLevelList() {
+    const box = $('levels-list'), draws = [];
+    box.textContent = '';
+    const cur = playing.kind === 'level' ? playing.level : saved.current;
+    $('levels-count').textContent = T('levels.solved', { k: PG.solvedCount(saved), n: LV.COUNT });
+    for (let k = 1; k <= LV.MAX_STARS; k++) {
+      const list = LV.LEVELS.filter(l => l.stars === k);
+      if (!list.length) continue;
+      const g = document.createElement('div');
+      g.className = 'lv-group';
+      const lo = Math.min(...list.map(l => l.n)), hi = Math.max(...list.map(l => l.n));
+      const title = document.createElement('div');
+      title.className = 'lv-title';
+      const st = document.createElement('span');
+      st.className = 'stars';
+      st.setAttribute('role', 'img');
+      st.setAttribute('aria-label', T('level.stars', { k, n: LV.MAX_STARS }));
+      st.innerHTML = starsHTML(k);
+      const txt = document.createElement('span');
+      txt.textContent = lo === hi ? T('opt.nsq', { n: lo }) : T('levels.range', { a: lo, b: hi });
+      title.append(st, txt);
+      const grid = document.createElement('div');
+      grid.className = 'lv-grid';
+      for (const l of list) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        const solved = PG.isSolved(saved, l.level);
+        b.className = 'lv' + (solved ? ' solved' : '') + (l.level === cur ? ' current' : '');
+        const num = document.createElement('span');
+        num.className = 'num';
+        num.textContent = String(l.level);
+        // a solved level shows the standard packing of its puzzle
+        if (solved) {
+          const cv = document.createElement('canvas');
+          cv.setAttribute('aria-hidden', 'true');
+          b.appendChild(cv);
+          const t = thumb(l);
+          draws.push(() => B.thumbnail(cv, l.s, t.pos, t.L));
+        }
+        b.appendChild(num);
+        const label = T(l.level === cur ? (solved ? 'levels.itemCurrentSolved' : 'levels.itemCurrent')
+          : solved ? 'levels.itemSolved' : 'levels.item', { k: l.level });
+        b.setAttribute('aria-label', label);
+        b.title = label;
+        if (l.level === cur) b.setAttribute('aria-current', 'true');
+        b.addEventListener('click', () => { closeMenu(); loadLevel(l.level); });
+        grid.appendChild(b);
+      }
+      g.append(title, grid);
+      box.appendChild(g);
+    }
+    // canvases need their size, so they are drawn once the menu is open
+    if (menu.open) requestAnimationFrame(() => draws.forEach(f => f()));
+  }
+  const thumbs = {};
+  function thumb(l) {
+    if (!thumbs[l.level]) {
+      const a = F.analyze(l.s);
+      thumbs[l.level] = { pos: a.reveal[0].positions, L: a.L };
+    }
+    return thumbs[l.level];
+  }
+
+  // ------------------------------------------------------------------ menu
+  const menu = $('menu');
+  function openMenu() { if (!menu.open) { menu.showModal(); renderLevelList(); } }
+  function closeMenu() { if (menu.open) menu.close(); }
+  $('menu-btn').addEventListener('click', openMenu);
+  $('menu-close').addEventListener('click', closeMenu);
+  menu.addEventListener('click', e => { if (e.target === menu) closeMenu(); });   // the backdrop
+  menu.addEventListener('close', () => $('menu-btn').focus());
+
+  for (const name of ['labels']) {
+    document.querySelectorAll(`input[name="${name}"]`).forEach(r =>
+      r.addEventListener('change', () => {
+        board.set(name, r.value);
+        prefs[name] = r.value;
+        save();
+      }));
+  }
+  const DIRS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+  const TURNS = { q: 'ccw', e: 'cw', h: 'flipH', v: 'flipV' };
+
+  // ------------------------------------------------------------------ keyboard on the board
+  // 1-8 pick a square, Enter places it, arrows step it to the next edge (Alt: one unit),
+  // Delete sends it back, Escape lets go.  Shift + arrows still push everything.
+  const sr = $('sr');
+  const say = msg => { sr.textContent = ''; setTimeout(() => { sr.textContent = msg; }, 30); };
+  $('board').addEventListener('keydown', e => {
+    if (!seed || e.metaKey || e.ctrlKey) return;
+    const n = seed.n, sideOf = i => seed.s[i];
+    if (/^[1-8]$/.test(e.key) && +e.key <= n) {
+      e.preventDefault();
+      const r = board.select(+e.key - 1);
+      if (r) say(T('kb.selected', { s: sideOf(r.i), k: r.i + 1, n }));
+      return;
+    }
+    if (e.key === 'Escape' && board.sel >= 0) { e.preventDefault(); board.sel = -1; board.draw(); return; }
+    const act = e.key === 'Enter' || e.key === ' ' ? 'place'
+      : e.key === 'Delete' || e.key === 'Backspace' ? 'back'
+      : DIRS[e.key] && !e.shiftKey ? 'step' : null;
+    if (!act) return;
+    if (board.sel < 0) {
+      if (act === 'step') return;                       // plain arrows push everything
+      e.preventDefault(); say(T('kb.none', { n })); return;
+    }
+    e.preventDefault();
+    const r = act === 'place' ? board.placeSelected()
+      : act === 'back' ? board.returnSelected() : board.stepSelected(DIRS[e.key], e.altKey);
+    if (!r) return;
+    const s = sideOf(r.i);
+    if (!r.ok) say(T(act === 'place' ? 'kb.noRoom' : 'kb.blocked', { s }));
+    else say(act === 'place' ? T('kb.placed', { s, x: r.pos[0], y: r.pos[1] })
+      : act === 'back' ? T('kb.returned', { s }) : T('kb.at', { s, x: r.pos[0], y: r.pos[1] }));
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.defaultPrevented || menu.open) return;
+    if (e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+    const op = TURNS[e.key.toLowerCase()];
+    if (op) { e.preventDefault(); turn(op); return; }
+    if (!DIRS[e.key]) return;
+    e.preventDefault();
+    board.gravity(DIRS[e.key]);
+  });
+
+  // ------------------------------------------------------------------ language
+  function applyStatic() {
+    for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = T(el.dataset.i18n);
+    for (const el of document.querySelectorAll('[data-i18n-html]')) el.innerHTML = T(el.dataset.i18nHtml);
+    for (const el of document.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', T(el.dataset.i18nAria));
+    for (const el of document.querySelectorAll('[data-i18n-title]')) el.title = T(el.dataset.i18nTitle);
+    $('lang-pick').value = I.lang;
+    // "Language" also in English, for someone who landed in a language they do not read
+    const langLabel = T('aria.lang') + (I.lang === 'en' ? '' : ' · Language');
+    $('lang-pick').setAttribute('aria-label', langLabel);
+    $('lang-pick').title = langLabel;
+    document.documentElement.lang = I.lang;
+  }
+  // ------------------------------------------------------------------ about
+  const ABOUT = {
+    version: '__VERSION__',
+    year: 2026,
+    author: 'Matthew Badger',
+    repo: 'https://github.com/matthew-badger/square-packing-game',
+    papers: ['2610.22622', '2610.28504'],
+    fonts: ['Archivo', 'Atkinson Hyperlegible', 'JetBrains Mono', 'Noto Sans Devanagari'],
+  };
+  const link = (href, text) => {
+    const a = document.createElement('a');
+    a.href = href; a.textContent = text; a.rel = 'noopener'; a.target = '_blank';
+    return a.outerHTML;
+  };
+  function renderAbout() {
+    const [a, b] = ABOUT.papers.map(id => link(`https://arxiv.org/abs/${id}`, `arXiv:${id}`));
+    $('about-what').innerHTML = T('about.what');
+    $('about-papers').innerHTML = T('about.papers', { a, b });
+    $('about-source').innerHTML = T('about.source', { repo: link(ABOUT.repo, ABOUT.repo.replace(/^https:\/\//, '')) });
+    const drafts = I.codes().filter(c => !I.META[c].reviewed).map(c => I.META[c].name);
+    $('about-langs').textContent = !I.META[I.lang].reviewed ? T('about.draft')
+      : drafts.length ? T('about.drafts', { list: I.list(drafts) }) : '';
+    $('about-langs').hidden = !$('about-langs').textContent;
+    const lic = T('about.license', { year: ABOUT.year, who: ABOUT.author });
+    // no space after a full-width full stop (Chinese)
+    $('about-license').textContent = lic + (/[。]$/.test(lic) ? '' : ' ') + T('about.fonts', { fonts: I.list(ABOUT.fonts) });
+  }
+
+  function relabel() {
+    applyStatic();
+    renderAbout();
+    renderFree();
+    if (seed) {
+      hintData = RV.hints(seed, 0);
+      renderHints();
+      if (!$('answer').hidden) renderAnswer(RV.answer(seed, tab));
+      update(board.status());
+      renderLead();
+    }
+    renderLevelList();
+    board.draw();
+  }
+  // the menu lists each language in its own script; drafts carry their own word for "draft"
+  for (const code of I.codes()) {
+    const o = document.createElement('option');
+    o.value = code;
+    o.lang = code;
+    o.textContent = I.label(code);
+    $('lang-pick').appendChild(o);
+  }
+  $('lang-pick').addEventListener('change', e => {
+    prefs.lang = I.setLang(e.target.value);
+    save();
+    relabel();
+  });
+
+  // a seed in the link, e.g.  #19.16.13.12.10.9.8  opens it in Free play; otherwise the
+  // game opens on the current level
+  board.labels = prefs.labels;
+  applyStatic();
+  renderAbout();
+  syncOptions();
+  const h = location.hash.replace(/^#/, '');
+  const fromLink = h ? parseSides(h.replace(/\./g, ' ')) : {};
+  if (fromLink.sides) load(fromLink.sides);
+  else loadLevel(saved.current);
+})();
+</script>
+</body>
+</html>

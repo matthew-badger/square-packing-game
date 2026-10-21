@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it as below. The formulas for L*_n that it
+  implements are proved in arXiv:2610.22622 and arXiv:2610.28504; please cite those
+  papers for the mathematics.
+title: Square Packing
+version: 0.2.0
+type: software
+authors:
+  - family-names: Badger
+    given-names: Matthew
+    affiliation: University of Connecticut
+license: MIT
+repository-code: "https://github.com/matthew-badger/square-packing-game"
+url: "https://tangentmeasure.com/square-packing-game/"
+abstract: >-
+  A browser game on packing 4 to 8 axis-parallel squares into the smallest square
+  frame, with 29 levels (one for each optimal packing strategy up to eight squares) and
+  a free-play mode. The frame side L*_n and every hint and answer are computed from the
+  exact closed formulas for L*_n, n <= 8, and their canonical packings.
+keywords:
+  - square packing
+  - translative packing
+  - axis-parallel squares
+  - discrete geometry
+  - mathematical game

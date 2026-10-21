@@ -1,0 +1,5 @@
+# generated, large or local
+test/fixture_L8.json
+release/
+__pycache__/
+.DS_Store
