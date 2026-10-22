@@ -381,6 +381,13 @@
       this.cssW = this.cssH = 1;
 
       canvas.addEventListener('pointerdown', e => this.down(e));
+      // The page sets touch-action: pan-y on the board, so a finger on empty board scrolls the
+      // page.  A touch that lands on a square (or arrives mid-drag) cancels that scrolling here,
+      // before the browser commits to it, so the square can be dragged instead.
+      canvas.addEventListener('touchstart', e => {
+        const t = e.touches[0];
+        if (this.drag || e.touches.length > 1 || this.grabbable(t.clientX, t.clientY)) e.preventDefault();
+      }, { passive: false });
       canvas.addEventListener('pointermove', e => this.move(e));
       canvas.addEventListener('pointerup', e => this.up(e));
       canvas.addEventListener('pointercancel', e => this.up(e, true));
@@ -639,6 +646,13 @@
         if (x >= qx && x <= qx + s && y >= qy && y <= qy + s) return i;
       }
       return -1;
+    }
+
+    /** Would a press at this screen point pick up a square? */
+    grabbable(clientX, clientY) {
+      if (!this.sides.length || this.anim || this.shown) return false;
+      const r = this.canvas.getBoundingClientRect();
+      return this.hit(clientX - r.left, clientY - r.top) >= 0;
     }
 
     down(e) {

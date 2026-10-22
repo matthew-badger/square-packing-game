@@ -258,7 +258,7 @@ main {
 
 canvas { display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
 canvas.dragging { cursor: grabbing !important; }
-#board { position: absolute; inset: 0; border-radius: 10px; }
+#board { position: absolute; inset: 0; border-radius: 10px; touch-action: pan-y; }   /* empty board scrolls the page; see board.js */
 
 .btn {
   height: 54px; padding: 0 28px; border-radius: 27px;
@@ -300,13 +300,13 @@ details summary { cursor: pointer; font-size: 14px; color: var(--muted); }
 
 /* menu drawer */
 dialog.drawer {
-  margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min(440px, 100vw); max-width: 100vw; box-sizing: border-box;
+  margin: 0 0 0 auto; height: 100vh; max-height: 100vh; height: 100dvh; max-height: 100dvh; width: min(440px, 100vw); max-width: 100vw; box-sizing: border-box;
   border: 0; border-left: 1px solid var(--line); padding: 0; background: var(--panel); color: var(--ink);
 }
 dialog.drawer::backdrop { background: rgba(5, 8, 15, 0.55); }
 .drawer-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .drawer-head h2 { margin: 0; font: 800 22px var(--font-display); }
-.drawer-body { padding: 8px 20px 40px; display: flex; flex-direction: column; }
+.drawer-body { padding: 8px 20px calc(80px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; }
 .drawer-body > section { padding: 18px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .drawer-body > section:last-child { border-bottom: 0; }
 .drawer-body h3 { margin: 0; font: 800 17px var(--font-display); }
@@ -360,13 +360,19 @@ kbd { font: 600 13px var(--font-mono); border: 1px solid var(--line-2); border-b
     grid-template-rows: auto auto auto;
     grid-template-areas: "lead" "stage" "side";
     gap: 14px;
-    padding: 16px 16px 28px;
+    padding: 16px 16px calc(80px + env(safe-area-inset-bottom, 0px));
   }
   .lead { padding-top: 0; gap: 8px; }
   .goal { font-size: 32px; }
   .goal-sub { font-size: 17px; }
   .stage { position: static; gap: 14px; }
-  .table { height: max(380px, min(640px, calc(100svh - 300px))); }
+  /* the board takes the screen height left between the goal (--above) and the buttons
+     (--below, both set by the script) less a margin, so the buttons stay clear of a
+     browser's bottom bar */
+  .table { height: max(260px, min(640px, calc(100vh - var(--above, 230px) - var(--below, 66px) - 34px))); }
+  @supports (height: 100svh) {
+    .table { height: max(260px, min(640px, calc(100svh - var(--above, 230px) - var(--below, 66px) - 34px))); }
+  }
   .actions { justify-content: stretch; flex-wrap: wrap; gap: 8px; }
   .actions .btn { flex: 1 1 auto; height: 52px; padding: 0 14px; font-size: 17px; }
   /* Start over and Skip shrink to icons; Next level keeps its words */
@@ -2531,6 +2537,13 @@ kbd { font: 600 13px var(--font-mono); border: 1px solid var(--line-2); border-b
       this.cssW = this.cssH = 1;
 
       canvas.addEventListener('pointerdown', e => this.down(e));
+      // The page sets touch-action: pan-y on the board, so a finger on empty board scrolls the
+      // page.  A touch that lands on a square (or arrives mid-drag) cancels that scrolling here,
+      // before the browser commits to it, so the square can be dragged instead.
+      canvas.addEventListener('touchstart', e => {
+        const t = e.touches[0];
+        if (this.drag || e.touches.length > 1 || this.grabbable(t.clientX, t.clientY)) e.preventDefault();
+      }, { passive: false });
       canvas.addEventListener('pointermove', e => this.move(e));
       canvas.addEventListener('pointerup', e => this.up(e));
       canvas.addEventListener('pointercancel', e => this.up(e, true));
@@ -2789,6 +2802,13 @@ kbd { font: 600 13px var(--font-mono); border: 1px solid var(--line-2); border-b
         if (x >= qx && x <= qx + s && y >= qy && y <= qy + s) return i;
       }
       return -1;
+    }
+
+    /** Would a press at this screen point pick up a square? */
+    grabbable(clientX, clientY) {
+      if (!this.sides.length || this.anim || this.shown) return false;
+      const r = this.canvas.getBoundingClientRect();
+      return this.hit(clientX - r.left, clientY - r.top) >= 0;
     }
 
     down(e) {
@@ -3907,6 +3927,23 @@ kbd { font: 600 13px var(--font-mono); border: 1px solid var(--line-2); border-b
   let puzzle = { hints: 0, shown: 0, answered: false, solved: false };
   let playing = { kind: 'level', level: saved.current };
   const board = new B.Board($('board'), update);
+
+  // On phones the board fills the height left between the goal and the buttons: --above is
+  // where the board starts, --below the height of the button row and the gap above it
+  function fitBoard() {
+    const top = Math.round($('table').getBoundingClientRect().top + window.scrollY);
+    const act = document.querySelector('.actions');
+    const below = act.offsetHeight + parseFloat(getComputedStyle(act.parentElement).rowGap || 0);
+    document.documentElement.style.setProperty('--above', top + 'px');
+    document.documentElement.style.setProperty('--below', Math.round(below) + 'px');
+  }
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(fitBoard);
+    ro.observe(document.querySelector('.top'));
+    ro.observe(document.querySelector('.lead'));
+    ro.observe(document.querySelector('.actions'));
+  }
+  window.addEventListener('resize', fitBoard);
   const answerBtn = $('answer-btn');
 
   function parseSides(text) {
